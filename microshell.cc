@@ -240,8 +240,15 @@ int main(int argc, char **argv, char **envp) {
 				}
 			}
 		} else if (commands.size() > 1) {			
-// CASE 2. PIPES			
-			peter_piper(commands);			
+// CASE 2. PIPES	
+			pid_t pid = fork();
+			
+			if (pid == 0) {						
+				peter_piper(commands);			
+			} else {
+				int code;
+				wait(&code);
+			}			
 		}				
 	}
 	return 0;
