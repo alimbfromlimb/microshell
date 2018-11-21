@@ -1,24 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <fcntl.h>
-#include <unistd.h> //прототипы системных вызовов
-#include <sys/types.h> //типы системных вызовов
+#include <unistd.h> // prototypes of the system calls
+#include <sys/types.h> // types of the system calls
 #include <sys/stat.h>
 #include <sys/wait.h>
-
 #include <string.h>
 #include <errno.h>
-
 #include <iostream>
-//~ #include <cstring>
 #include <string>
 #include <vector>
-
-#include <glob.h>
-
-// #include <readline/readline.h> 
-//#include <readline/history.h> 
+#include <glob.h> // the one which works with regular expressions
+#include <sys/times.h>
 
 using namespace std;
 
@@ -28,6 +21,7 @@ string CURR_DIR;
 // Clearing the shell using escape sequences 
 #define clear() printf("\033[H\033[J") 
 
+// This little function "launches" the microshell and clears the screen
 void init_microsha() 
 { 
     clear(); 
@@ -43,6 +37,8 @@ void init_microsha()
     clear(); 
 }
 
+// This function is responsible for greeting the user 
+// every time he/she is about to write a new command
 void greeting_f(string *s) {
 	char cwd[1000];
 	getcwd(cwd, sizeof(cwd));
@@ -61,41 +57,33 @@ void greeting_f(string *s) {
         exit(1);
     }
     getline(&buffer,&bufsize,stdin);
-    //~ //
-    //~ if (strlen(buffer) != 0) { 
-        //~ add_history(buffer); 
-    //~ }
-    //~ //
 	*(s) = (string) buffer;
 	free(buffer);
 }
 
+// The command line user wrote may contain regular expressions with * or |
+// To help the microshell deal with such cases my_glob function was written
 vector<string> my_glob(const string &pattern) {
-
-    // glob struct resides on the stack
     glob_t glob_result;
-    memset(&glob_result, 0, sizeof(glob_result));
-
     // do the glob operation
     int return_value = glob(pattern.c_str(), GLOB_TILDE, NULL, &glob_result);
     if(return_value != 0) {
         globfree(&glob_result);
-        perror("metasymbols function failed\n");
+        perror("metasymbol function failed\n");
     }
-
-    // collect all the filenames into a std::list<std::string>
+    // collect all the filenames into a vector
     vector<string> filenames;
     for(size_t i = 0; i < glob_result.gl_pathc; ++i) {
         filenames.push_back(string(glob_result.gl_pathv[i]));
     }
-    // cleanup
+    // let's clean the glob_result
     globfree(&glob_result);
     // done
     return filenames;
 }
-
-vector<string> split(const string& s)
-{
+// Now, let's parse the user's command into the command itself,
+// It's option flags and arguements
+vector<string> split(const string& s) {
     vector<string> ret;
     typedef string::size_type string_size;
     string_size i = 0;
@@ -106,13 +94,11 @@ vector<string> split(const string& s)
        // invariant: characters in range [original i, current i) are all spaces
         while (i != s.size() && isspace(s[i]))
             ++i;
-
        // find end of next word
         string_size j = i;
        // invariant: none of the characters in range [original j, current j)is a space
 		while (j != s.size() && !isspace(s[j]))
 			j++;
-
       // if we found some nonwhitespace characters 
 		if (i != j) {
          // copy from s starting at i and taking j - i chars
@@ -120,26 +106,25 @@ vector<string> split(const string& s)
 			i = j;
 		}
     }
-    
+    // ...and dealing with metasymbols:
     vector<string> ret_meta;
 	int N_ret = ret.size();
-	int count;
-	for(count = 0; count < N_ret; count++) {
-		if ((ret[count].find('*') != std::string::npos) | (ret[count].find('?') != std::string::npos)) {
-			vector<string> file_names = my_glob(ret[count]);
-			int count_2;
+	int k;
+	for(k = 0; k < N_ret; k++) {
+		if ((ret[k].find('*') != std::string::npos) | (ret[k].find('?') != std::string::npos)) {
+			vector<string> file_names = my_glob(ret[k]);
+			int c;
 			int N_files = file_names.size();
-			for (count_2 = 0; count_2 < N_files; count_2++) {
-				ret_meta.push_back(file_names[count_2]);
+			for (c = 0; c < N_files; c++) {
+				ret_meta.push_back(file_names[c]);
 			}
 		} else {
-			ret_meta.push_back(ret[count]);
+			ret_meta.push_back(ret[k]);
 		}		
 	}
-    
     return ret_meta;
 }
-
+// This function implements the pipeline
 void peter_piper (vector <vector <string> > commands){
 	int i; 
 	int n_commands = commands.size();
@@ -156,39 +141,33 @@ void peter_piper (vector <vector <string> > commands){
 				v.push_back(tmp);
 			}
 			v.push_back(NULL);		
-			/*int status = */
-			execvp(v[0], (char * const*) &v[0]);
+			int status = execvp(v[0], (char * const*) &v[0]);
 			perror("Failed to do execvp!\n");
-			/*exit(status);*/
+			exit(status);
 		} else {
 			dup2(fd[0], 0);
 			close(fd[1]);
 		}	
 	}
+//  The last command is different: we want it write to stdout
 	vector<const char *> last_command;
 	for (vector<string>::size_type j = 0; j < commands[n_commands-1].size(); j++) {
 		const char *tmp = commands[n_commands-1][j].c_str();
 		last_command.push_back(tmp);
 	}
 	last_command.push_back(NULL);
-	execvp(last_command[0], (char * const*) &last_command[0]);
-	//int status = //
-	perror("Failed to do execvp!\n");
-	// exit(status); //
+	int status = execvp(last_command[0], (char * const*) &last_command[0]);
+	exit(status);
 }
 
 int main(int argc, char **argv, char **envp) {
 	
 	init_microsha();
 	
-	//printf("INITIALIZED\n");
-	
 	// getting shell's home directory
 	char *buffer_for_home_dir;
 	buffer_for_home_dir = getenv("HOME");
 	HOME_DIR = (string) buffer_for_home_dir;
-	
-	//printf("GOT HOME DIRECTORY\n");
 	
 	// here is the programme per se
 	while (1) {
@@ -200,7 +179,7 @@ int main(int argc, char **argv, char **envp) {
 	// let's parse this line into commands
 		vector<string> v = split(s);
 		
-	// let's create a two-dimensional array	
+	// let's create a two-dimensional array	of commands
 		vector < vector < string > > commands;
 		int flag = 0;
 		int i = 0;
@@ -209,11 +188,9 @@ int main(int argc, char **argv, char **envp) {
 			vector<string> row;
 			while (1) {
 				if (i == n_words) {
-					//row.push_back(NULL);
 					flag = 1;
 					break;
 				} else if (v[i] == "|") {
-					//row.push_back(NULL);
 					i++;
 					break;		
 				} else {
@@ -224,12 +201,15 @@ int main(int argc, char **argv, char **envp) {
 			commands.push_back(row);
 			if (flag) break;
 		}
+		
+// It was written in the task that cases with and without '|' should be 
+// treated differently		
 
 // CASE 1. NO PIPES
 		
 		if (commands.size() == 1) {
 			
-// Commands "cd" and "pwd" are very special. In the other cases we will use run_command function.	
+// Commands "cd", "pwd", "exit" (optional), "help" and "time"  are very special:	
 
 			if (commands[0][0] == "cd") {
 				if (commands[0].size() == 1) {
@@ -245,7 +225,32 @@ int main(int argc, char **argv, char **envp) {
 				printf("\nSee you soon :)\n");
 				exit(0);
 			} else if (commands[0][0] == "help") {
-				printf("\n\n\nIT IS NOT A REAL BASH, JUST A STUPID EMULATOR\n\tPLEASE EXIT AND STOP WASTING YOUR TIME\n");						
+				printf("\n\n\nIT IS NOT A REAL BASH, JUST A STUPID EMULATOR\n\tPLEASE EXIT AND STOP WASTING YOUR TIME\n");
+				
+			} else if (commands[0][0] == "time") {
+				
+				vector<const char*> command; 
+				for (vector<string>::size_type j = 1; j < commands[0].size(); j++) {
+					if ((commands[0][j] == "<") or (commands[0][j] == ">")) break;
+					const char *tmp = commands[0][j].c_str();
+					command.push_back(tmp);
+				}
+				command.push_back(NULL);				
+				tms start;
+				tms end;
+				clock_t clock_start;
+				clock_start = times(&start);
+				pid_t pid = fork();
+				if (pid == 0) {
+					int status = execvp(command[0], (char * const *)&command[0]);
+					exit(status);
+				}
+				int code;
+				wait(&code);
+				clock_t clock_end;
+				clock_end = times(&end);
+				fprintf(stderr, "real\t%lf\nsys\t%lf\nuser\t%lf\n", 10000 * (double)(clock_end - clock_start) / CLOCKS_PER_SEC, 10000 * (double)(end.tms_cstime - start.tms_cstime) / CLOCKS_PER_SEC, 10000 * (double)(end.tms_cutime - start.tms_cutime) / CLOCKS_PER_SEC);
+				// My groupmate tried bash time with an analogue clock. It turned out, that to get a real time, you gotta multiply by 10000...			
 			} else {
 				
 // All the other commands, which may contain '>' or '<'
