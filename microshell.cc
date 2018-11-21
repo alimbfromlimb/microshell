@@ -15,8 +15,10 @@
 #include <string>
 #include <vector>
 
-#include <readline/readline.h> 
-#include <readline/history.h> 
+#include <glob.h>
+
+// #include <readline/readline.h> 
+//#include <readline/history.h> 
 
 using namespace std;
 
@@ -59,8 +61,37 @@ void greeting_f(string *s) {
         exit(1);
     }
     getline(&buffer,&bufsize,stdin);
+    //~ //
+    //~ if (strlen(buffer) != 0) { 
+        //~ add_history(buffer); 
+    //~ }
+    //~ //
 	*(s) = (string) buffer;
 	free(buffer);
+}
+
+vector<string> my_glob(const string &pattern) {
+
+    // glob struct resides on the stack
+    glob_t glob_result;
+    memset(&glob_result, 0, sizeof(glob_result));
+
+    // do the glob operation
+    int return_value = glob(pattern.c_str(), GLOB_TILDE, NULL, &glob_result);
+    if(return_value != 0) {
+        globfree(&glob_result);
+        perror("metasymbols function failed\n");
+    }
+
+    // collect all the filenames into a std::list<std::string>
+    vector<string> filenames;
+    for(size_t i = 0; i < glob_result.gl_pathc; ++i) {
+        filenames.push_back(string(glob_result.gl_pathv[i]));
+    }
+    // cleanup
+    globfree(&glob_result);
+    // done
+    return filenames;
 }
 
 vector<string> split(const string& s)
@@ -68,18 +99,45 @@ vector<string> split(const string& s)
     vector<string> ret;
     typedef string::size_type string_size;
     string_size i = 0;
+
+    // invariant: we have processed characters [original value of i, i) 
     while (i != s.size()) {
+       // ignore leading blanks
+       // invariant: characters in range [original i, current i) are all spaces
         while (i != s.size() && isspace(s[i]))
             ++i;
+
+       // find end of next word
         string_size j = i;
-	while (j != s.size() && !isspace(s[j]))
-		j++; 
-	if (i != j) {
-		ret.push_back(s.substr(i, j - i));
-		i = j;
-	}
+       // invariant: none of the characters in range [original j, current j)is a space
+		while (j != s.size() && !isspace(s[j]))
+			j++;
+
+      // if we found some nonwhitespace characters 
+		if (i != j) {
+         // copy from s starting at i and taking j - i chars
+			ret.push_back(s.substr(i, j - i));
+			i = j;
+		}
     }
-    return ret;
+    
+    vector<string> ret_meta;
+	int N_ret = ret.size();
+	int count;
+	for(count = 0; count < N_ret; count++) {
+		if ((ret[count].find('*') != std::string::npos) | (ret[count].find('?') != std::string::npos)) {
+			vector<string> file_names = my_glob(ret[count]);
+			int count_2;
+			int N_files = file_names.size();
+			for (count_2 = 0; count_2 < N_files; count_2++) {
+				ret_meta.push_back(file_names[count_2]);
+			}
+		} else {
+			ret_meta.push_back(ret[count]);
+		}		
+	}
+    
+    return ret_meta;
 }
 
 void peter_piper (vector <vector <string> > commands){
@@ -213,6 +271,7 @@ int main(int argc, char **argv, char **envp) {
 						}				
 					}
 				}
+
 				vector<const char*> command; 
 				for (vector<string>::size_type j = 0; j < commands[0].size(); j++) {
 					if ((commands[0][j] == "<") or (commands[0][j] == ">")) break;
@@ -240,7 +299,8 @@ int main(int argc, char **argv, char **envp) {
 				}
 			}
 		} else if (commands.size() > 1) {			
-// CASE 2. PIPES	
+// CASE 2. PIPES
+			
 			pid_t pid = fork();
 			
 			if (pid == 0) {						
@@ -253,6 +313,7 @@ int main(int argc, char **argv, char **envp) {
 	}
 	return 0;
 }
+
 
 
 
