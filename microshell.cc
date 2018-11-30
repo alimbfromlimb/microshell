@@ -22,20 +22,20 @@ string CURR_DIR;
 #define clear() printf("\033[H\033[J") 
 
 // This little function "launches" the microshell and clears the screen
-void init_microsha() 
-{ 
-    clear(); 
-    printf("\n\n\n\n******************"
-        "************************"); 
-    printf("\n\n\n\t****MICROSHA****");  
-    printf("\n\n\n\n*******************"
-        "***********************"); 
-    char* username = getenv("USER"); 
-    printf("\n\n\nUSER is: @%s", username); 
-    printf("\n"); 
-    sleep(1); 
-    clear(); 
-}
+//~ void init_microsha() 
+//~ { 
+    //~ clear(); 
+    //~ printf("\n\n\n\n******************"
+        //~ "************************"); 
+    //~ printf("\n\n\n\t****MICROSHA****");  
+    //~ printf("\n\n\n\n*******************"
+        //~ "***********************"); 
+    //~ char* username = getenv("USER"); 
+    //~ printf("\n\n\nUSER is: @%s", username); 
+    //~ printf("\n"); 
+    //~ sleep(1); 
+    //~ clear(); 
+//~ }
 
 // This function is responsible for greeting the user 
 // every time he/she is about to write a new command
@@ -53,7 +53,7 @@ void greeting_f(string *s) {
     size_t bufsize = 32;
     buffer = (char *)malloc(bufsize * sizeof(char));
     if(buffer == NULL) {
-        perror("Sorry, unable to allocate buffer");
+        printf("Sorry, unable to allocate buffer\n");
         exit(1);
     }
     getline(&buffer,&bufsize,stdin);
@@ -142,7 +142,8 @@ void peter_piper (vector <vector <string> > commands){
 			}
 			v.push_back(NULL);		
 			int status = execvp(v[0], (char * const*) &v[0]);
-			perror("Failed to do execvp!\n");
+            if (status != 0) printf("Please make sure your command is correct\n");
+			//~printf("Failed to do execvp!\n");
 			exit(status);
 		} else {
 			dup2(fd[0], 0);
@@ -157,12 +158,13 @@ void peter_piper (vector <vector <string> > commands){
 	}
 	last_command.push_back(NULL);
 	int status = execvp(last_command[0], (char * const*) &last_command[0]);
+    if (status != 0) printf("Please make sure your command is correct\n");
 	exit(status);
 }
 
 int main(int argc, char **argv, char **envp) {
 	
-	init_microsha();
+	//init_microsha();
 	
 	// getting shell's home directory
 	char *buffer_for_home_dir;
@@ -179,144 +181,162 @@ int main(int argc, char **argv, char **envp) {
 	// let's parse this line into commands
 		vector<string> v = split(s);
 		
-	// let's create a two-dimensional array	of commands
-		vector < vector < string > > commands;
-		int flag = 0;
-		int i = 0;
-		int n_words = v.size();
-		while (1) {
-			vector<string> row;
+		if (v.size() != 0) {
+		
+		// let's create a two-dimensional array	of commands
+			vector < vector < string > > commands;
+			int flag = 0;
+			int i = 0;
+			int n_words = v.size();
 			while (1) {
-				if (i == n_words) {
-					flag = 1;
-					break;
-				} else if (v[i] == "|") {
-					i++;
-					break;		
-				} else {
-					row.push_back(v[i]);
-					i++;	
-				}
-			}
-			commands.push_back(row);
-			if (flag) break;
-		}
-		
-// It was written in the task that cases with and without '|' should be 
-// treated differently		
-
-// CASE 1. NO PIPES
-		
-		if (commands.size() == 1) {
-			
-// Commands "cd", "pwd", "exit" (optional), "help" and "time"  are very special:	
-
-			if (commands[0][0] == "cd") {
-				if (commands[0].size() == 1) {
-					chdir(HOME_DIR.c_str());
-				} else {
-					if (chdir(commands[0][1].c_str()) < 0) {
-						perror("PATH DOES NOT EXIST!");
+				vector<string> row;
+				while (1) {
+					if (i == n_words) {
+						flag = 1;
+						break;
+					} else if (v[i] == "|") {
+						i++;
+						break;		
+					} else {
+						row.push_back(v[i]);
+						i++;	
 					}
 				}
-			} else if (commands[0][0] == "pwd") {
-				printf("%s\n", CURR_DIR.c_str());
-			} else if (commands[0][0] == "exit") {
-				printf("\nSee you soon :)\n");
-				exit(0);
-			} else if (commands[0][0] == "help") {
-				printf("\n\n\nIT IS NOT A REAL BASH, JUST A STUPID EMULATOR\n\tPLEASE EXIT AND STOP WASTING YOUR TIME\n");
+				commands.push_back(row);
+				if (flag) break;
+			}
+			
+	// It was written in the task that cases with and without '|' should be 
+	// treated differently		
+
+	// CASE 1. NO PIPES
+			
+			if (commands.size() == 1) {
 				
-			} else if (commands[0][0] == "time") {
-				
-				vector<const char*> command; 
-				for (vector<string>::size_type j = 1; j < commands[0].size(); j++) {
-					if ((commands[0][j] == "<") or (commands[0][j] == ">")) break;
-					const char *tmp = commands[0][j].c_str();
-					command.push_back(tmp);
-				}
-				command.push_back(NULL);				
-				tms start;
-				tms end;
-				clock_t clock_start;
-				clock_start = times(&start);
-				pid_t pid = fork();
-				if (pid == 0) {
-					int status = execvp(command[0], (char * const *)&command[0]);
-					exit(status);
-				}
-				int code;
-				wait(&code);
-				clock_t clock_end;
-				clock_end = times(&end);
-				fprintf(stderr, "real\t%lf\nsys\t%lf\nuser\t%lf\n", 10000 * (double)(clock_end - clock_start) / CLOCKS_PER_SEC, 10000 * (double)(end.tms_cstime - start.tms_cstime) / CLOCKS_PER_SEC, 10000 * (double)(end.tms_cutime - start.tms_cutime) / CLOCKS_PER_SEC);
-				// My groupmate tried bash time with an analogue clock. It turned out, that to get a real time, you gotta multiply by 10000...			
-			} else {
-				
-// All the other commands, which may contain '>' or '<'
-		
-				int n_words = commands[0].size();
-				string output_file_name;
-				string input_file_name;
-				int flag_more = 0;
-				int flag_less = 0;
-				for (int i = 0; i < n_words - 1; i++) {
-					if (commands[0][i] == ">") {
-						output_file_name = commands[0][i+1];
-						flag_more = 1;
-						if ((output_file_name == ">") or (output_file_name == "<")) {
-							perror("A filename is missed :(\n");
+	// Commands "cd", "pwd", "exit" (optional), "help" and "time"  are very special:	
+
+				if (commands[0][0] == "cd") {
+					if (commands[0].size() == 1) {
+						chdir(HOME_DIR.c_str());
+					} else {
+						if (chdir(commands[0][1].c_str()) < 0) {
+							perror("PATH DOES NOT EXIST!");
 						}
 					}
-					if (commands[0][i] == "<") {
-						input_file_name = commands[0][i+1];
-						flag_less = 1;
-						if ((input_file_name == ">") or (input_file_name == "<")) {
-							perror("A filename is missed :(\n");
-						}				
+				} else if (commands[0][0] == "pwd") {
+					printf("%s\n", CURR_DIR.c_str());
+				} else if (commands[0][0] == "exit") {
+					printf("\nSee you soon :)\n");
+					exit(0);
+				} else if (commands[0][0] == "help") {
+					printf("\n\n\nIT IS NOT A REAL BASH, JUST A STUPID EMULATOR\n\tPLEASE EXIT AND STOP WASTING YOUR TIME\n");
+					
+				} else if (commands[0][0] == "time") {
+					
+					vector<const char*> command; 
+					for (vector<string>::size_type j = 1; j < commands[0].size(); j++) {
+						if ((commands[0][j] == "<") or (commands[0][j] == ">")) break;
+						const char *tmp = commands[0][j].c_str();
+						command.push_back(tmp);
+					}
+					command.push_back(NULL);				
+					tms start;
+					tms end;
+					clock_t clock_start;
+					clock_start = times(&start);
+					pid_t pid = fork();
+					if (pid == 0) {
+						int status = execvp(command[0], (char * const *)&command[0]);
+                        if (status != 0) printf("Please make sure your command is correct\n");
+						exit(status);
+					}
+					int code;
+					wait(&code);
+					clock_t clock_end;
+					clock_end = times(&end);
+					fprintf(stderr, "real\t%lf\nsys\t%lf\nuser\t%lf\n", 10000 * (double)(clock_end - clock_start) / CLOCKS_PER_SEC, 10000 * (double)(end.tms_cstime - start.tms_cstime) / CLOCKS_PER_SEC, 10000 * (double)(end.tms_cutime - start.tms_cutime) / CLOCKS_PER_SEC);
+					// My groupmate tried bash time with an analogue clock. It turned out, that to get a real time, you gotta multiply by 10000...			
+				} else {
+					
+	// All the other commands, which may contain '>' or '<'
+			
+					int n_words = commands[0].size();
+					string output_file_name;
+					string input_file_name;
+					int flag_more = 0;
+					int flag_less = 0;
+                    int more_count = 0;
+                    int less_count = 0;
+                    int two_or_more_same_signs = 0;
+					for (int i = 0; i < n_words - 1; i++) {
+						if (commands[0][i] == ">") {
+							output_file_name = commands[0][i+1];
+							flag_more = 1;
+                            more_count += 1;
+							if ((output_file_name == ">") or (output_file_name == "<")) {
+								perror("A filename is missed :(\n");
+							}
+						}
+						if (commands[0][i] == "<") {
+							input_file_name = commands[0][i+1];
+							flag_less = 1;
+                            less_count += 1;
+							if ((input_file_name == ">") or (input_file_name == "<")) {
+								perror("A filename is missed :(\n");
+							}				
+						}
+                        if ((more_count > 1) | (less_count > 1)) {
+                            printf("The > symbol can't be mentioned more than once\n in a command line (the same for <)\n");
+                            two_or_more_same_signs = 1;
+                        }                        
+					}
+					if (two_or_more_same_signs) {
+						continue;
+					}
+					vector<const char*> command; 
+					for (vector<string>::size_type j = 0; j < commands[0].size(); j++) {
+						if ((commands[0][j] == "<") or (commands[0][j] == ">")) break;
+						const char *tmp = commands[0][j].c_str();
+						command.push_back(tmp);
+					}
+					command.push_back(NULL);
+
+					pid_t pid = fork();
+
+					if (pid == 0) {					
+						if (flag_less) {
+							int in_fd = open((const char*) input_file_name.c_str(), O_RDONLY | O_CREAT, 0666);
+							dup2(in_fd, 0);
+						}
+						if (flag_more) {	
+							int out_fd = open((const char*) output_file_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
+							dup2(out_fd, 1);
+						}
+						int status = execvp(command[0], (char * const*)&command[0]);
+						if (status != 0) printf("Please make sure the name of your command is correct\n");
+						exit(status);
+					} else {
+						int code;
+						wait(&code);
 					}
 				}
-
-				vector<const char*> command; 
-				for (vector<string>::size_type j = 0; j < commands[0].size(); j++) {
-					if ((commands[0][j] == "<") or (commands[0][j] == ">")) break;
-					const char *tmp = commands[0][j].c_str();
-					command.push_back(tmp);
-				}
-				command.push_back(NULL);
-
+			} else if (commands.size() > 1) {			
+	// CASE 2. PIPES
+				
 				pid_t pid = fork();
-
-				if (pid == 0) {					
-					if (flag_less) {
-						int in_fd = open((const char*) input_file_name.c_str(), O_RDONLY | O_CREAT, 0666);
-						dup2(in_fd, 0);
-					}
-					if (flag_more) {	
-						int out_fd = open((const char*) output_file_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
-						dup2(out_fd, 1);
-					}
-					execvp(command[0], (char * const*)&command[0]);
-					perror("run_command");
+				
+				if (pid == 0) {						
+					peter_piper(commands);			
 				} else {
 					int code;
 					wait(&code);
-				}
-			}
-		} else if (commands.size() > 1) {			
-// CASE 2. PIPES
-			
-			pid_t pid = fork();
-			
-			if (pid == 0) {						
-				peter_piper(commands);			
-			} else {
-				int code;
-				wait(&code);
-			}			
-		}				
+				}			
+			}				
+		} else {
+			continue;	
+		}
 	}
-	return 0;
+	return 0;	
 }
 
 
