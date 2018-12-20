@@ -150,6 +150,7 @@ void peter_piper (vector <vector <string> > commands){
 		pipe(fd);
 		pid_t pid = fork();
 		if (pid == 0){
+			signal(2, SIG_DFL);
 			dup2(fd[1], 1);
 			close(fd[0]);
 			vector<const char *> v;
@@ -194,7 +195,7 @@ void peter_piper (vector <vector <string> > commands){
 
 
 int main(int argc, char **argv, char **envp) {
-	
+	signal(2, SIG_IGN);
 	//init_microsha();
 	
 	// getting shell's home directory
@@ -293,6 +294,7 @@ int main(int argc, char **argv, char **envp) {
 					clock_start = times(&start);
 					pid_t pid = fork();
 					if (pid == 0) {
+						signal(2, SIG_DFL);
 						int status = execvp(command[0], (char * const *)&command[0]);
                         if (status != 0) printf("Please make sure your command is correct\n");
 						exit(status);
@@ -366,7 +368,8 @@ int main(int argc, char **argv, char **envp) {
 
 					pid_t pid = fork();
 
-					if (pid == 0) {					
+					if (pid == 0) {
+						signal(2, SIG_DFL);					
 						if (flag_less) {
 							int in_fd = open((const char*) input_file_name.c_str(), O_RDONLY | O_CREAT, 0666);
 							dup2(in_fd, 0);
@@ -388,7 +391,8 @@ int main(int argc, char **argv, char **envp) {
 				if (!check_f(commands)) {
 					pid_t pid = fork();
 					
-					if (pid == 0) {						
+					if (pid == 0) {
+						signal(2, SIG_DFL);						
 						peter_piper(commands);			
 					} else {
 						int code;
