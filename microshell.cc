@@ -18,61 +18,21 @@ using namespace std;
 string HOME_DIR;
 string CURR_DIR;
 
-// Clearing the shell using escape sequences 
-#define clear() printf("\033[H\033[J") 
-
-// This little function "launches" the microshell and clears the screen
-//~ void init_microsha() 
-//~ { 
-    //~ clear(); 
-    //~ printf("\n\n\n\n******************"
-        //~ "************************"); 
-    //~ printf("\n\n\n\t****MICROSHA****");  
-    //~ printf("\n\n\n\n*******************"
-        //~ "***********************"); 
-    //~ char* username = getenv("USER"); 
-    //~ printf("\n\n\nUSER is: @%s", username); 
-    //~ printf("\n"); 
-    //~ sleep(1); 
-    //~ clear(); 
-//~ }
-
-// This function is responsible for greeting the user 
-// every time he/she is about to write a new command
-void greeting_f(string *s) {
-	char cwd[1000];
-	getcwd(cwd, sizeof(cwd));
-	uid_t uid = getuid();
-	if ((long long) uid == 0) {
-		printf("%s! ", cwd);
-	} else {
-		printf("%s> ", cwd);
-	}
-	CURR_DIR = string(cwd);
-	char *buffer;
-    size_t bufsize = 32;
-    buffer = (char *)malloc(bufsize * sizeof(char));
-    if(buffer == NULL) {
-        printf("Sorry, unable to allocate buffer\n");
-        exit(1);
-    }
-    getline(&buffer,&bufsize,stdin);
-	*(s) = (string) buffer;
-	free(buffer);
-}
-
 // The command line user wrote may contain regular expressions with * or |
 // To help the microshell deal with such cases my_glob function was written
 vector<string> my_glob(const string &pattern) {
     glob_t glob_result;
+    vector<string> filenames;
     // do the glob operation
     int return_value = glob(pattern.c_str(), GLOB_TILDE, NULL, &glob_result);
     if(return_value != 0) {
         globfree(&glob_result);
-        perror("metasymbol function failed\n");
+        //perror("metasymbol function failed\n");											//
+        filenames.push_back(pattern);
+		return filenames;
     }
     // collect all the filenames into a vector
-    vector<string> filenames;
+    //vector<string> filenames;
     for(size_t i = 0; i < glob_result.gl_pathc; ++i) {
         filenames.push_back(string(glob_result.gl_pathv[i]));
     }
@@ -124,7 +84,64 @@ vector<string> split(const string& s) {
 	}
     return ret_meta;
 }
+
+int check_f(vector <vector <string> > commands) {
+	int n_commands = commands.size();
+	int continue_flag = 0;
+		
+	int n_words = commands[0].size();
+	int flag_more = 0;
+	int flag_less = 0;
+	int more_count = 0;
+    int less_count = 0;
+    for (int j = 0; j < n_words-1; j++) {
+		if (commands[0][j] == ">") continue_flag = 1;
+		if (commands[0][j] == "<") {
+			less_count += 1;
+		}
+		if (less_count >= 2) continue_flag = 1;
+	}
+	if ((commands[0][0] == ">") || (commands[0][0] == "<")) {
+		continue_flag = 1;
+	}		
+	if ((commands[0][n_words - 1] == ">") || (commands[0][n_words - 1] == "<")) {
+		continue_flag = 1;
+	}	
+	
+	for(int i = 1; i < n_commands - 1; i++){
+		int n_words = commands[i].size();
+        for (int j = 0; j < n_words - 1; j++) {
+			if ((commands[i][j] == ">") || (commands[i][j] == "<")) {
+				continue_flag = 1;
+			}				
+		}
+	}
+	
+	n_words = commands[n_commands-1].size();
+	flag_more = 0;
+	flag_less = 0;
+	more_count = 0;
+    less_count = 0;
+    for (int j = 0; j < n_words-1; j++) {
+		if (commands[n_commands-1][j] == "<") continue_flag = 1;
+		if (commands[n_commands-1][j] == ">") {
+			more_count += 1;
+		}
+		if (more_count >= 2) continue_flag = 1;
+	}
+	if ((commands[n_commands-1][0] == ">") || (commands[n_commands-1][0] == "<")) {
+		continue_flag = 1;
+	}		
+	if ((commands[n_commands-1][n_words - 1] == ">") || (commands[n_commands-1][n_words - 1] == "<")) {
+		continue_flag = 1;
+	}				
+	return continue_flag;
+}
+
+
 // This function implements the pipeline
+
+
 void peter_piper (vector <vector <string> > commands){
 	int i; 
 	int n_commands = commands.size();
@@ -137,6 +154,12 @@ void peter_piper (vector <vector <string> > commands){
 			close(fd[0]);
 			vector<const char *> v;
 			for (vector<string>::size_type j = 0; j < commands[i].size(); j++) {
+				if (commands[i][j] == "<") {
+					string input_file_name = commands[i][j + 1];
+					int in_fd = open((const char*) input_file_name.c_str(), O_RDONLY | O_CREAT, 0666);
+					dup2(in_fd, 0);
+					break;
+				}
 				const char *tmp = commands[i][j].c_str();
 				v.push_back(tmp);
 			}
@@ -153,6 +176,12 @@ void peter_piper (vector <vector <string> > commands){
 //  The last command is different: we want it write to stdout
 	vector<const char *> last_command;
 	for (vector<string>::size_type j = 0; j < commands[n_commands-1].size(); j++) {
+		if (commands[i][j] == ">") {
+			string output_file_name = commands[i][j + 1];
+			int out_fd = open((const char*) output_file_name.c_str(), O_WRONLY | O_CREAT, 0666);
+			dup2(out_fd, 1);
+			break;
+		}
 		const char *tmp = commands[n_commands-1][j].c_str();
 		last_command.push_back(tmp);
 	}
@@ -161,6 +190,8 @@ void peter_piper (vector <vector <string> > commands){
     if (status != 0) printf("Please make sure your command is correct\n");
 	exit(status);
 }
+
+
 
 int main(int argc, char **argv, char **envp) {
 	
@@ -176,7 +207,23 @@ int main(int argc, char **argv, char **envp) {
 		
 	// let's greet the user and get his command line
 		string s;
-		greeting_f(&s);
+		
+		char cwd[1000];
+		getcwd(cwd, sizeof(cwd));
+		uid_t uid = getuid();
+		if ((long long) uid == 0) {
+			printf("%s! ", cwd);
+		} else {
+			printf("%s> ", cwd);
+		}
+		CURR_DIR = string(cwd);
+						
+		getline(cin, s);
+		if (cin.eof() && (s.length() == 0)) {
+			cout << endl;
+			break;
+		}
+		if (cin.eof()) return 0;		
 		
 	// let's parse this line into commands
 		vector<string> v = split(s);
@@ -268,6 +315,22 @@ int main(int argc, char **argv, char **envp) {
                     int more_count = 0;
                     int less_count = 0;
                     int two_or_more_same_signs = 0;
+                    if ((commands[0][0] == ">") || (commands[0][0] == "<")) {
+						printf("A command can't start with a < or > sign\n");
+						continue;
+					}
+                    if (((commands[0][n_words-1] == ">") || (commands[0][n_words-1] == "<")) && (commands[0][0] != "cat")) {
+						printf("A command can't finish with a < or > sign\n");
+						continue;
+					}
+                    if ((commands[0][n_words-1] == ">") && (commands[0][0] == "cat")) {
+						printf("A cat command can't finish with a > sign\n");
+						continue;
+					}
+					if ((n_words != 2) && (commands[0][0] == "cat") && (commands[0][n_words-1] == "<"))	{
+						printf("Please check that command is right\n");
+						continue;
+					}														
 					for (int i = 0; i < n_words - 1; i++) {
 						if (commands[0][i] == ">") {
 							output_file_name = commands[0][i+1];
@@ -322,15 +385,19 @@ int main(int argc, char **argv, char **envp) {
 				}
 			} else if (commands.size() > 1) {			
 	// CASE 2. PIPES
-				
-				pid_t pid = fork();
-				
-				if (pid == 0) {						
-					peter_piper(commands);			
+				if (!check_f(commands)) {
+					pid_t pid = fork();
+					
+					if (pid == 0) {						
+						peter_piper(commands);			
+					} else {
+						int code;
+						wait(&code);
+					}																
 				} else {
-					int code;
-					wait(&code);
-				}			
+					printf("Please make sure that only the first command\nin your pipeline contains an input redirection\nand only the last one output redirection.\nAlso make sure you did not miss a file name.\n");
+					continue;
+				}					
 			}				
 		} else {
 			continue;	
@@ -338,12 +405,4 @@ int main(int argc, char **argv, char **envp) {
 	}
 	return 0;	
 }
-
-
-
-
-
-
-
-
 
